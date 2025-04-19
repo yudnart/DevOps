@@ -1,0 +1,56 @@
+name: Setup SDKs
+
+on:
+  workflow_call:
+    inputs:
+      sdks:
+        description: 'Space-delimited list of frameworks to check and install (e.g., "net48 net8.0 netstandard2.0")'
+        required: true
+        type: string
+
+jobs:
+  validate-sdks:
+    runs-on: windows-latest
+    outputs:
+      supported_sdks: ${{ steps.validate.outputs.supported_sdks }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate SDKs input
+        id: validate
+        run: |
+          $sdks = '${{ inputs.sdks }}' -split '\s+'
+          $supportedSdks = @()
+          $unsupportedSdks = @()
+          foreach ($framework in $sdks) {
+            $workflowFile = "workflows/shared/frameworks/$framework.yml"
+            if (Test-Path $workflowFile) {
+              Write-Host "Framework $framework supported, workflow file found: $workflowFile"
+              $supportedSdks += $framework
+            } else {
+              Write-Host "Framework $framework not supported, workflow file not found: $workflowFile"
+              $unsupportedSdks += $framework
+            }
+          }
+          if ($unsupportedSdks) {
+            $unsupportedList = $unsupportedSdks -join ', '
+            Write-Error "Framework(s) $unsupportedList is not supported or is invalid."
+            exit 1
+          }
+          $supportedSdksJson = $supportedSdks | ConvertTo-Json -Compress
+          "supported_sdks=$supportedSdksJson" | Out-File -Append -FilePath $env:GITHUB_OUTPUT
+        shell: pwsh
+
+  setup-sdks:
+    needs: validate-sdks
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        framework: ${{ fromJson(needs.validate-sdks.outputs.supported_sdks) }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup ${{ matrix.framework }} SDK
+        uses: ./workflows/shared/frameworks/${{ matrix.framework }}.yml

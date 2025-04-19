@@ -1,0 +1,106 @@
+name: Run NUnit Tests
+
+on:
+  workflow_call:
+    inputs:
+      source:
+        description: 'Path to a specific test project, directory containing test projects, or pattern to match test projects (e.g., "tests/MyTests.csproj", "tests/", "tests/**/*Tests*.csproj")'
+        required: true
+        type: string
+      log-level:
+        description: 'Log level: trace, debug, info, warning, error'
+        required: false
+        default: 'error'
+        type: string
+
+jobs:
+  run-nunit-tests:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Find test projects
+        id: find_tests
+        run: |
+          $location = '${{ inputs.source }}'
+          $testProjects = @()
+          if ($location -like "*.csproj" -and (Test-Path $location)) {
+            # Specific project file
+            $testProjects += $location
+          } elseif (Test-Path $location -PathType Container) {
+            # Directory
+            $testProjects = Get-ChildItem -Path $location -Filter "*.csproj" -Recurse | ForEach-Object { $_.FullName }
+          } else {
+            # Pattern
+            $testProjects = Get-ChildItem -Path $location -Filter "*.csproj" -Recurse -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName }
+          }
+          if (-not $testProjects) {
+            Write-Error "No test projects found at location: $location"
+            exit 1
+          }
+          $testProjectsJson = $testProjects | ConvertTo-Json -Compress
+          "test_projects=$testProjectsJson" | Out-File -Append -FilePath $env:GITHUB_OUTPUT
+        shell: pwsh
+
+      - name: Check for parallel.runsettings
+        id: check_parallel_settings
+        run: |
+          if (Test-Path "tests/parallel.runsettings") {
+            Write-Host "parallel.runsettings found, enabling parallel test execution"
+            "use_parallel=true" | Out-File -Append -FilePath $env:GITHUB_OUTPUT
+          } else {
+            Write-Host "`e[1;34m***[To run your tests in parallel, please include the settings file at 'tests/parallel.runsettings'.]***`e[0m"
+            "use_parallel=false" | Out-File -Append -FilePath $env:GITHUB_OUTPUT
+          }
+        shell: pwsh
+
+      - name: Run NUnit tests
+        run: |
+          $TEST_PROJECTS = '${{ steps.find_tests.outputs.test_projects }}' | ConvertFrom-Json
+          $LOG_LEVEL = "${{ inputs.log-level }}"
+          $USE_PARALLEL = "${{ steps.check_parallel_settings.outputs.use_parallel }}"
+          $VERBOSITY = switch ($LOG_LEVEL) {
+            "info" { "normal" }
+            "debug" { "detailed" }
+            "warning" { "minimal" }
+            "error" { "quiet" }
+            "trace" { "diagnostic" }
+            default { "quiet" }
+          }
+          Write-Host "Using verbosity level: $VERBOSITY"
+          foreach ($PROJ in $TEST_PROJECTS) {
+            Write-Host "Running NUnit tests for $PROJ with log level $LOG_LEVEL"
+            if ($LOG_LEVEL -eq "error") {
+              $OUTPUT_FILE = "test-output-$([System.IO.Path]::GetFileNameWithoutExtension($PROJ)).txt"
+              if ($USE_PARALLEL -eq "true") {
+                # Parallel execution
+                dotnet test $PROJ --configuration Release --no-build --verbosity $VERBOSITY --logger "console;verbosity=$VERBOSITY" --settings tests/parallel.runsettings --test-adapter-path:. > $OUTPUT_FILE
+              } else {
+                # Sequential execution
+                dotnet test $PROJ --configuration Release --no-build --verbosity $VERBOSITY --logger "console;verbosity=$VERBOSITY" > $OUTPUT_FILE
+              }
+              $EXIT_CODE = $LASTEXITCODE
+              if ($EXIT_CODE -ne 0) {
+                $FAILED_TESTS = Select-String -Path $OUTPUT_FILE -Pattern "Failed\s+.*" | ForEach-Object { $_.Line }
+                if ($FAILED_TESTS) {
+                  Write-Host "Failed tests for $PROJ:"
+                  $FAILED_TESTS | ForEach-Object { Write-Host $_ }
+                } else {
+                  Write-Host "No failed tests for $PROJ, but exit code $EXIT_CODE indicates failure"
+                  Get-Content $OUTPUT_FILE
+                }
+                exit 1
+              } else {
+                Write-Host "No failed tests for $PROJ"
+              }
+            } else {
+              if ($USE_PARALLEL -eq "true") {
+                dotnet test $PROJ --configuration Release --no-build --verbosity $VERBOSITY --logger "console;verbosity=$VERBOSITY" --settings tests/parallel.runsettings --test-adapter-path:.
+              } else {
+                dotnet test $PROJ --configuration Release --no-build --verbosity $VERBOSITY --logger "console;verbosity=$VERBOSITY"
+              }
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            }
+          }
+        shell: pwsh
