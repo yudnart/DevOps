@@ -1,0 +1,40 @@
+name: Build
+
+on:
+  workflow_call:
+    inputs:
+      source:
+        description: 'Path to a specific project, directory containing projects, or pattern to match projects (e.g., "tests/MyTests.csproj", "tests/", "tests/**/*Tests*.csproj")'
+        required: true
+        type: string
+      target-frameworks:
+        description: 'Space-delimited list of target frameworks to check and install SDKs for (e.g., "net48 net8.0 netstandard2.0"). If empty, resolves target frameworks from project files.'
+        required: false
+        type: string
+
+jobs:
+  main:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Resolve target frameworks from projects
+        id: resolve_target_frameworks
+        if: inputs.target-frameworks == ''
+        uses: ./resolve-target-frameworks.yml
+        with:
+          source: ${{ inputs.source }}
+
+      - name: Setup .NET
+        uses: ./setup-dotnet.yml
+        with:
+          dotnet-versions: ${{ inputs.target-frameworks != '' && inputs.target-frameworks || steps.resolve_target_frameworks.outputs.frameworks }}
+
+      - name: Restore dependencies
+        run: dotnet restore
+        shell: pwsh
+
+      - name: Build
+        run: dotnet build --configuration Release --no-restore
+        shell: pwsh

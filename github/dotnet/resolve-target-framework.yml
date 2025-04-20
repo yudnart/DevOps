@@ -1,0 +1,67 @@
+name: Resolve Target Frameworks
+
+on:
+  workflow_call:
+    inputs:
+      source:
+        description: 'Path to a specific project, directory containing projects, or pattern to match projects (e.g., "tests/MyTests.csproj", "tests/", "tests/**/*Tests*.csproj")'
+        required: true
+        type: string
+    outputs:
+      frameworks:
+        description: 'Space-delimited list of unique target frameworks (e.g., "net48 net8.0")'
+        value: ${{ jobs.resolve-target-frameworks.outputs.frameworks }}
+
+jobs:
+  resolve-target-frameworks:
+    runs-on: windows-latest
+    outputs:
+      frameworks: ${{ steps.resolve_frameworks.outputs.frameworks }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Resolve target frameworks from projects
+        id: resolve_frameworks
+        run: |
+          $source = '${{ inputs.source }}'
+          $projects = @()
+          if ($source -like "*.csproj" -and (Test-Path $source)) {
+            # Specific project file
+            $projects += $source
+          } elseif (Test-Path $source -PathType Container) {
+            # Directory
+            $projects = Get-ChildItem -Path $source -Filter "*.csproj" -Recurse | ForEach-Object { $_.FullName }
+          } else {
+            # Pattern
+            $projects = Get-ChildItem -Path $source -Filter "*.csproj" -Recurse -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName }
+          }
+          if (-not $projects) {
+            Write-Error "No projects found at location: $source"
+            exit 1
+          }
+          
+          $targetFrameworks = @()
+          foreach ($proj in $projects) {
+            Write-Host "Parsing $proj for target frameworks"
+            $xml = [xml](Get-Content $proj)
+            $targetFramework = $xml.Project.PropertyGroup.TargetFramework
+            $targetFrameworksNode = $xml.Project.PropertyGroup.TargetFrameworks
+            if ($targetFramework) {
+              $targetFrameworks += $targetFramework
+            }
+            if ($targetFrameworksNode) {
+              $targetFrameworks += $targetFrameworksNode.Split(';')
+            }
+          }
+          
+          $uniqueFrameworks = $targetFrameworks | Select-Object -Unique
+          if (-not $uniqueFrameworks) {
+            Write-Error "No target frameworks found in projects"
+            exit 1
+          }
+          
+          $frameworks = $uniqueFrameworks -join ' '
+          Write-Host "Determined required frameworks: $frameworks"
+          "frameworks=$frameworks" | Out-File -Append -FilePath $env:GITHUB_OUTPUT
+        shell: pwsh
