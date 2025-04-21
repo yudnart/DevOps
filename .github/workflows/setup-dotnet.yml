@@ -1,0 +1,54 @@
+name: Setup .NET
+
+on:
+  workflow_call:
+    inputs:
+      dotnet-versions:
+        description: 'Space-delimited list of .NET versions to check and install (e.g., "net48 net8.0 netstandard2.0")'
+        required: true
+        type: string
+
+jobs:
+  validate-dotnet-versions:
+    runs-on: windows-latest
+    outputs:
+      versions: ${{ steps.validate.outputs.versions }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate .NET versions input
+        id: validate
+        run: |
+          $versions = '${{ inputs.dotnet-versions }}' -split '\s+'
+          $unsupportedVersions = @()
+          foreach ($version in $versions) {
+            $workflowFile = "frameworks/$version.yml"
+            if (Test-Path $workflowFile) {
+              Write-Host ".NET version $version supported, installer found: $workflowFile"
+            } else {
+              Write-Host ".NET version $version not supported, installer not found: $workflowFile"
+              $unsupportedVersions += $version
+            }
+          }
+          if ($unsupportedVersions) {
+            $unsupportedList = $unsupportedVersions -join ', '
+            Write-Error ".NET version(s) $unsupportedList is not supported or is invalid."
+            exit 1
+          }
+          $versionsJson = $versions | ConvertTo-Json -Compress
+          "versions=$versionsJson" | Out-File -Append -FilePath $env:GITHUB_OUTPUT
+        shell: pwsh
+
+  setup-dotnet:
+    needs: validate-dotnet-versions
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        version: ${{ fromJson(needs.validate-dotnet-versions.outputs.versions) }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup ${{ matrix.version }} .NET SDK
+        uses: ./dotnet/frameworks/${{ matrix.version }}.yml

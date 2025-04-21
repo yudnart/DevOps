@@ -1,0 +1,34 @@
+name: Setup net48 SDK
+
+on:
+  workflow_call:
+
+jobs:
+  setup-net48:
+    runs-on: windows-latest
+    steps:
+      - name: Check .NET Framework 4.8 SDK (net48)
+        id: check_net48
+        run: |
+          $net48Installed = (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full" -ErrorAction SilentlyContinue).Version -ge "4.8"
+          if (-not $net48Installed) {
+            Write-Host "NET Framework 4.8 SDK (net48) not found"
+            "net48_installed=false" | Out-File -Append -FilePath $env:GITHUB_OUTPUT
+          } else {
+            Write-Host "NET Framework 4.8 SDK (net48) found"
+            "net48_installed=true" | Out-File -Append -FilePath $env:GITHUB_OUTPUT
+          }
+        shell: pwsh
+
+      - name: Setup .NET Framework 4.8 SDK (net48)
+        if: steps.check_net48.outputs.net48_installed != 'true'
+        run: |
+          Write-Host "Installing .NET Framework 4.8 SDK (net48)..."
+          Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/?linkid=2088631" -OutFile "NDP48-DevPack-ENU.exe"
+          Start-Process -FilePath "NDP48-DevPack-ENU.exe" -ArgumentList "/q /norestart" -Wait
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Failed to install .NET Framework 4.8 SDK (net48) with exit code $LASTEXITCODE"
+            exit $LASTEXITCODE
+          }
+          Write-Host ".NET Framework 4.8 SDK (net48) installed successfully"
+        shell: pwsh

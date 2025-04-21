@@ -1,0 +1,13 @@
+name: Setup netstandard2.0 SDK
+
+on:
+  workflow_call:
+
+jobs:
+  setup-netstandard20:
+    runs-on: windows-latest
+    steps:
+      - name: Setup .NET 8.0 SDK for netstandard2.0
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
