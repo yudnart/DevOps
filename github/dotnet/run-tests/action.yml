@@ -61,7 +61,7 @@ runs:
         source: ${{ inputs.source }}
         target-frameworks: ${{ inputs.target-frameworks }}
 
-    - name: Run ${{ inputs.test-framework }} tests
+    - name: Run tests
       uses: yudnart/DevOps/github/dotnet/test-runners/${{ inputs.test-framework }}@feature/initial
       with:
         source: ${{ inputs.source }}
