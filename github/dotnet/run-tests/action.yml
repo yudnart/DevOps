@@ -1,0 +1,29 @@
+name: Run Tests
+
+description: 'Runs tests for a .NET project using the specified test framework.'
+
+inputs:
+  source:
+    description: 'Path to a specific test project, directory containing test projects, or pattern to match test projects (e.g., "tests/MyTests.csproj", "tests/", "tests/**/*Tests*.csproj")'
+    required: true
+  test-framework:
+    description: 'Test framework to run (e.g., "nunit", "xunit")'
+    required: true
+  target-frameworks:
+    description: 'Space-delimited list of target frameworks to check and install SDKs for (e.g., "net48 net8.0 netstandard2.0"). If empty, resolves target frameworks from project files.'
+    required: false
+  log-level:
+    description: 'Log level: trace, debug, info, warning, error'
+    required: false
+    default: 'error'
+
+runs:
+  using: "composite"
+  steps:
+    - name: Run tests
+      uses: ./run-tests.yml
+      with:
+        source: ${{ inputs.source }}
+        test-framework: ${{ inputs.test-framework }}
+        target-frameworks: ${{ inputs.target-frameworks }}
+        log-level: ${{ inputs.log-level }}
