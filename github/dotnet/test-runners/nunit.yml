@@ -75,7 +75,7 @@ jobs:
               $OUTPUT_FILE = "test-output-$([System.IO.Path]::GetFileNameWithoutExtension($PROJ)).txt"
               if ($USE_PARALLEL -eq "true") {
                 # Parallel execution
-                dotnet test $PROJ --configuration Release --no-build --verbosity $VERBOSITY --logger "console;verbosity=$VERBOSITY" --settings tests/parallel.runsettings --test-adapter-path:. > $OUTPUT_FILE
+                dotnet test $PROJ --configuration Release --no-build --verbosity $VERBOSITY --logger "console;verbosity=$VERBOSITY" --settings tests/parallel.runsettings > $OUTPUT_FILE
               } else {
                 # Sequential execution
                 dotnet test $PROJ --configuration Release --no-build --verbosity $VERBOSITY --logger "console;verbosity=$VERBOSITY" > $OUTPUT_FILE
@@ -96,7 +96,7 @@ jobs:
               }
             } else {
               if ($USE_PARALLEL -eq "true") {
-                dotnet test $PROJ --configuration Release --no-build --verbosity $VERBOSITY --logger "console;verbosity=$VERBOSITY" --settings tests/parallel.runsettings --test-adapter-path:.
+                dotnet test $PROJ --configuration Release --no-build --verbosity $VERBOSITY --logger "console;verbosity=$VERBOSITY" --settings tests/parallel.runsettings
               } else {
                 dotnet test $PROJ --configuration Release --no-build --verbosity $VERBOSITY --logger "console;verbosity=$VERBOSITY"
               }
