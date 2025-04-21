@@ -7,21 +7,7 @@ jobs:
   setup-net80:
     runs-on: windows-latest
     steps:
-      - name: Check .NET 8 SDK (net8.0)
-        id: check_net80
-        run: |
-          $dotnet8Installed = (dotnet --list-sdks | Select-String '^8\.0\.\d+') -ne $null
-          if (-not $dotnet8Installed) {
-            Write-Host "NET 8.0 SDK (net8.0) not found"
-            "dotnet8_installed=false" | Out-File -Append -FilePath $env:GITHUB_OUTPUT
-          } else {
-            Write-Host "NET 8.0 SDK (net8.0) found"
-            "dotnet8_installed=true" | Out-File -Append -FilePath $env:GITHUB_OUTPUT
-          }
-        shell: pwsh
-
-      - name: Setup .NET 8 SDK (net8.0)
-        if: steps.check_net80.outputs.dotnet8_installed != 'true'
+      - name: Setup .NET 8.0 SDK
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'

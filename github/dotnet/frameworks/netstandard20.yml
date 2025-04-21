@@ -7,27 +7,7 @@ jobs:
   setup-netstandard20:
     runs-on: windows-latest
     steps:
-      - name: Check latest .NET SDK for netstandard2.0
-        id: check_netstandard20
-        run: |
-          # Get the list of installed .NET SDKs
-          $sdks = dotnet --list-sdks | ForEach-Object { $_.Split()[0] }
-          # Filter for SDKs >= 5.0 (netstandard2.0 is supported by .NET 5.0 and later)
-          $compatibleSdks = $sdks | Where-Object { $_ -match '^(5|6|7|8|9)\.\d+\.\d+' } | Sort-Object -Descending
-          if ($compatibleSdks) {
-            $latestSdk = $compatibleSdks[0]
-            Write-Host "Latest compatible .NET SDK for netstandard2.0 found: $latestSdk"
-            "sdk_version=$latestSdk" | Out-File -Append -FilePath $env:GITHUB_OUTPUT
-            "netstandard20_installed=true" | Out-File -Append -FilePath $env:GITHUB_OUTPUT
-          } else {
-            Write-Host "No compatible .NET SDK for netstandard2.0 found, will install .NET 8.0 as the latest stable version"
-            "sdk_version=8.0.x" | Out-File -Append -FilePath $env:GITHUB_OUTPUT
-            "netstandard20_installed=false" | Out-File -Append -FilePath $env:GITHUB_OUTPUT
-          }
-        shell: pwsh
-
-      - name: Setup latest .NET SDK for netstandard2.0
-        if: steps.check_netstandard20.outputs.netstandard20_installed != 'true'
+      - name: Setup .NET 8.0 SDK for netstandard2.0
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: ${{ steps.check_netstandard20.outputs.sdk_version }}
+          dotnet-version: '8.0.x'
