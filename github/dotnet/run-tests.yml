@@ -1,0 +1,80 @@
+name: Run Tests
+
+on:
+  workflow_call:
+    inputs:
+      source:
+        description: 'Path to a specific test project, directory containing test projects, or pattern to match test projects (e.g., "tests/MyTests.csproj", "tests/", "tests/**/*Tests*.csproj")'
+        required: true
+        type: string
+      test-framework:
+        description: 'Test framework to run (e.g., "nunit", "xunit")'
+        required: true
+        type: string
+      target-frameworks:
+        description: 'Space-delimited list of target frameworks to check and install SDKs for (e.g., "net48 net8.0 netstandard2.0"). If empty, resolves target frameworks from project files.'
+        required: false
+        type: string
+      log-level:
+        description: 'Log level: trace, debug, info, warning, error'
+        required: false
+        default: 'error'
+        type: string
+
+jobs:
+  ensure-framework:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate test framework input
+        id: validate
+        run: |
+          $framework = '${{ inputs.test-framework }}'
+          $workflowFile = "test-runners/$framework.yml"
+          if (Test-Path $workflowFile) {
+            Write-Host "Test framework $framework supported, workflow file found: $workflowFile"
+          } else {
+            Write-Error "Framework $framework is not supported or is invalid."
+            exit 1
+          }
+        shell: pwsh
+
+      - name: Validate log level input
+        run: |
+          $logLevel = '${{ inputs.log-level }}'
+          $validLogLevels = @("info", "debug", "warning", "error", "trace")
+          if ($validLogLevels -notcontains $logLevel) {
+            Write-Error "Invalid log level: $logLevel. Supported log levels are: $validLogLevels"
+            exit 1
+          }
+        shell: pwsh
+
+  run-tests:
+    needs: ensure-framework
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Try download build artifacts
+        id: download_artifacts
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts-${{ github.run_id }}
+          path: .
+
+      - name: Build project
+        if: steps.download_artifacts.outcome != 'success'
+        uses: ./build.yml
+        with:
+          source: ${{ inputs.source }}
+          target-frameworks: ${{ inputs.target-frameworks }}
+
+      - name: Run ${{ inputs.test-framework }} tests
+        uses: ./test-runners/${{ inputs.test-framework }}.yml
+        with:
+          source: ${{ inputs.source }}
+          log-level: ${{ inputs.log-level }}
